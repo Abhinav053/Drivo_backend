@@ -1,0 +1,63 @@
+@baseurl = http://localhost:5055
+@contentType = application/json
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OTc4NDEwZGFlOTY2NThhZDdmZDJkYjMiLCJpYXQiOjE3Njk1MDk0NTgsImV4cCI6MTc2OTUxMzA1OH0.fQtbXSONsfnCkktPIM7_-geLY-G-7J5nUwjDO04WEic
+
+### Register
+POST {{baseurl}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "name": "driver2",
+  "email": "driver2@123gmail.com",
+  "password": "driver@123",
+  "role": "driver"
+}
+
+
+### Login
+POST {{baseurl}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "driver1@123gmail.com",
+  "password": "driver@123",
+  "location": {
+    "type": "Point",
+    "coordinates": [77.7222, 12.9888]
+  }
+}
+
+### Get Passenger bookings
+GET {{baseurl}}/api/v1/passengers/bookings
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+
+
+
+
+### Create Booking
+POST {{baseurl}}/api/v1/bookings/
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "source": {
+    "latitude": 12.9851,
+    "longitude": 77.7109
+  },
+  "destination": {
+    "latitude": 12.995854,
+    "longitude": 77.696350
+  }
+}
+
+### Update Driver Location
+POST {{baseurl}}/api/v1/drivers/location
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "latitude": 77.7999,
+  "longitude": 12.9999
+}
