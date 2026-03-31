@@ -1,4 +1,4 @@
-# 🚗 Uber Backend - Ride-Sharing Platform API
+# 🚗 Drivo Backend - Ride-Sharing Platform API
 
 A full-featured **ride-sharing backend service** built with Node.js, Express, MongoDB, Redis, and WebSockets. This project implements a modern Uber-like system that matches passengers with nearby drivers in real-time.
 
