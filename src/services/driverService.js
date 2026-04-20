@@ -3,14 +3,14 @@ const locationService = require("./locationService");
 
 const updateLocation = async (driverId, location) => {
   try {
-    console.log(driverId, location);
-    
+    if (!location) {
+      throw new Error("Location is required");
+    }
+
     const lat = parseFloat(location.latitude);
     const long = parseFloat(location.longitude);
 
-    if (Number.isNaN(lat) || Number.isNaN(long)) {
-      throw new Error("Invalid coordinated!");
-    }
+    locationService.validateCoordinates(lat, long);
 
     await locationService.addDriverLocation(driverId, lat, long);
 
@@ -18,7 +18,7 @@ const updateLocation = async (driverId, location) => {
       driverId,
       {
         type: "Point",
-        coordinates: [lat, long],
+        coordinates: [long, lat],
       },
     );
     return updateDetails;

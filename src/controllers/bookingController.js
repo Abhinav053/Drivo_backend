@@ -1,57 +1,55 @@
 const bookingService = require("../services/bookingService");
-const { io } = require("../index");
 const locationService = require("../services/locationService");
 
 const createBooking = (io) => async (req, res) => {
   try {
-    
-    console.log(req.body);
-    const { source, destination } = req.body;
+    const { source, destination, radiusKm } = req.body;
 
-    // new booking object create
     const booking = await bookingService.createBooking({
       passengerId: req.user._id,
       source,
       destination,
     });
 
-    // search near by drivers
-    const nearByDrivers = await bookingService.findNearByDrivers(source);
+    const nearByDrivers = await bookingService.findNearByDrivers(
+      source,
+      radiusKm,
+    );
     const driverIds = [];
 
-    // notify near by drivers
     for (const driver of nearByDrivers) {
-      // get socketId
-      // emit notification -> alert
-      const driverSocketId = await locationService.getDriverSocket(driver[0]);
+      const driverId = driver[0];
+      const driverSocketId = await locationService.getDriverSocket(driverId);
 
       if (driverSocketId) {
-        driverIds.push(driver[0]);
+        driverIds.push(driverId);
 
-        io.to(driverSocketId).emit("newBooking", {
+        io.to(driverSocketId).emit("new-booking", {
           bookingId: booking._id,
-          source,
-          destination,
+          source: booking.source,
+          destination: booking.destination,
           fare: booking.fare,
         });
       }
     }
 
-    // store the driverId of nearBy drivers also in the redis
     await locationService.storeNotifiedDrivers(booking._id, driverIds);
 
     return res.status(200).json({
       success: true,
-      data: booking,
+      data: {
+        booking,
+        notifiedDrivers: driverIds,
+      },
       msg: "booking create successfully!",
       error: null,
     });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(400).json({
       success: false,
       data: {},
       msg: "Not able to create booking",
-      error: error,
+      error: error.message,
     });
   }
 };
@@ -60,23 +58,39 @@ const confirmBooking = (io) => async (req, res) => {
   try {
     const { bookingId } = req.body;
 
-    const booking = await bookingService.assignDriver(bookingId, req.user._id);
+    const booking = await bookingService.confirmBooking(
+      bookingId,
+      req.user._id,
+    );
     const notifiedDriverIds =
       await locationService.getNotifiedDrivers(bookingId);
 
     for (const driverId of notifiedDriverIds) {
-      const driverSocketId = await locationService.getDriverSocket(bookingId);
+      const driverSocketId = await locationService.getDriverSocket(driverId);
 
-      if (driverSocketId) {
-        if (driverId == req.user._id) {
-          io.to(driverSocketId).emit("rideConfirmed", {
-            bookingId,
-            driverId: req.user._id,
-          });
-        } else {
-          io.to(driverSocketId).emit("removeBooking", { bookingId });
-        }
+      if (!driverSocketId) {
+        continue;
       }
+
+      if (driverId === req.user._id.toString()) {
+        io.to(driverSocketId).emit("booking-accepted", {
+          bookingId,
+          driverId: req.user._id,
+        });
+      } else {
+        io.to(driverSocketId).emit("remove-booking", { bookingId });
+      }
+    }
+
+    const passengerSocketId = await locationService.getPassengerSocket(
+      booking.passenger,
+    );
+
+    if (passengerSocketId) {
+      io.to(passengerSocketId).emit("ride-confirmed", {
+        bookingId,
+        driverId: req.user._id,
+      });
     }
 
     return res.status(200).json({
@@ -86,11 +100,11 @@ const confirmBooking = (io) => async (req, res) => {
       error: null,
     });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(400).json({
       success: false,
       data: {},
       msg: "Not able to confirm the booking",
-      error: error,
+      error: error.message,
     });
   }
 };

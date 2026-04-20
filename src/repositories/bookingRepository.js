@@ -30,15 +30,11 @@ const confirmBooking = async ({ passengerId, source, destination }) => {
 
 const updateBookingStatus = async (bookingId, driverId, status) => {
   try {
-    const booking = await bookingModel.findById({
-      bookingId: bookingId,
-    });
-
-    booking.driver = driverId;
-    booking.status = status;
-    await booking.save();
-
-    return booking;
+    return await bookingModel.findOneAndUpdate(
+      { _id: bookingId, status: "pending" },
+      { driver: driverId, status },
+      { new: true },
+    );
   } catch (error) {
     console.log("Something went wrong in repository layer:", error);
     throw error;
@@ -49,5 +45,5 @@ module.exports = {
   findBooking,
   createBooking,
   confirmBooking,
-  updateBookingStatus
+  updateBookingStatus,
 };
