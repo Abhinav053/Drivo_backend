@@ -2,8 +2,14 @@ const passengerService = require("../services/passengerService");
 
 const getPassengerDetails = async (req, res) => {
   try {
-    // console.log("Passenger controller hit");
-    // console.log(req.user);
+    if (req.user.role !== "passenger") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        error: "Forbidden",
+        message: "Only passengers can access passenger details",
+      });
+    }
 
     const passengerDetails = await passengerService.getPassengerById(
       req.user._id,
@@ -24,8 +30,49 @@ const getPassengerDetails = async (req, res) => {
   }
 };
 
+const getPassengerBookings = async (req, res) => {
+  try {
+    if (req.user.role !== "passenger") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        error: "Forbidden",
+        message: "Only passengers can access passenger bookings",
+      });
+    }
+
+    const bookings = await passengerService.getPassengerBookings(
+      req.user._id,
+      req.query,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: bookings,
+      error: {},
+      message: "Successfully fetched passenger bookings",
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      data: {},
+      error: error.message,
+      message: "Not able to fetch passenger bookings",
+    });
+  }
+};
+
 const provideFeedback = async (req, res) => {
   try {
+    if (req.user.role !== "passenger") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        error: "Forbidden",
+        message: "Only passengers can submit feedback",
+      });
+    }
+
     const { bookingId, rating, feedback } = req.body;
     const response = await passengerService.createPassengerFeedback(
       req.user._id,
@@ -51,5 +98,6 @@ const provideFeedback = async (req, res) => {
 
 module.exports = {
   getPassengerDetails,
+  getPassengerBookings,
   provideFeedback,
 };

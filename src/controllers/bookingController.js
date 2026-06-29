@@ -1,9 +1,19 @@
 const bookingService = require("../services/bookingService");
 const locationService = require("../services/locationService");
+const bookingSearchService = require("../services/bookingSearchService");
 
 const createBooking = (io) => async (req, res) => {
   try {
-    const { source, destination, radiusKm } = req.body;
+    if (req.user.role !== "passenger") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        msg: "Only passengers can create bookings",
+        error: "Forbidden",
+      });
+    }
+
+    const { source, destination } = req.body;
 
     const booking = await bookingService.createBooking({
       passengerId: req.user._id,
@@ -11,35 +21,16 @@ const createBooking = (io) => async (req, res) => {
       destination,
     });
 
-    const nearByDrivers = await bookingService.findNearByDrivers(
-      source,
-      radiusKm,
+    const searchResult = await bookingSearchService.startDriverSearch(
+      io,
+      booking,
     );
-    const driverIds = [];
-
-    for (const driver of nearByDrivers) {
-      const driverId = driver[0];
-      const driverSocketId = await locationService.getDriverSocket(driverId);
-
-      if (driverSocketId) {
-        driverIds.push(driverId);
-
-        io.to(driverSocketId).emit("new-booking", {
-          bookingId: booking._id,
-          source: booking.source,
-          destination: booking.destination,
-          fare: booking.fare,
-        });
-      }
-    }
-
-    await locationService.storeNotifiedDrivers(booking._id, driverIds);
 
     return res.status(200).json({
       success: true,
       data: {
         booking,
-        notifiedDrivers: driverIds,
+        notifiedDrivers: searchResult.notifiedDriverIds,
       },
       msg: "booking create successfully!",
       error: null,
@@ -56,7 +47,16 @@ const createBooking = (io) => async (req, res) => {
 
 const confirmBooking = (io) => async (req, res) => {
   try {
-    const { bookingId } = req.body;
+    if (req.user.role !== "driver") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        msg: "Only drivers can confirm bookings",
+        error: "Forbidden",
+      });
+    }
+
+    const bookingId = req.body.bookingId || req.params.bookingId;
 
     const booking = await bookingService.confirmBooking(
       bookingId,
@@ -73,12 +73,12 @@ const confirmBooking = (io) => async (req, res) => {
       }
 
       if (driverId === req.user._id.toString()) {
-        io.to(driverSocketId).emit("booking-accepted", {
+        io.to(driverSocketId).emit("rideConfirmed", {
           bookingId,
           driverId: req.user._id,
         });
       } else {
-        io.to(driverSocketId).emit("remove-booking", { bookingId });
+        io.to(driverSocketId).emit("removeBooking", { bookingId });
       }
     }
 
@@ -87,11 +87,13 @@ const confirmBooking = (io) => async (req, res) => {
     );
 
     if (passengerSocketId) {
-      io.to(passengerSocketId).emit("ride-confirmed", {
+      io.to(passengerSocketId).emit("rideConfirmed", {
         bookingId,
         driverId: req.user._id,
       });
     }
+
+    await locationService.clearNotifiedDrivers(bookingId);
 
     return res.status(200).json({
       success: true,
@@ -109,7 +111,140 @@ const confirmBooking = (io) => async (req, res) => {
   }
 };
 
+const completeBooking = (io) => async (req, res) => {
+  try {
+    if (req.user.role !== "driver") {
+      return res.status(403).json({
+        success: false,
+        data: {},
+        msg: "Only drivers can complete bookings",
+        error: "Forbidden",
+      });
+    }
+
+    const booking = await bookingService.completeBooking(
+      req.params.bookingId,
+      req.user._id,
+    );
+
+    const passengerSocketId = await locationService.getPassengerSocket(
+      booking.passenger?._id || booking.passenger,
+    );
+
+    if (passengerSocketId) {
+      io.to(passengerSocketId).emit("rideCompleted", {
+        bookingId: booking._id,
+        status: booking.status,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: booking,
+      msg: "Ride completed successfully",
+      error: null,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      data: {},
+      msg: "Not able to complete booking",
+      error: error.message,
+    });
+  }
+};
+
+const cancelBooking = (io) => async (req, res) => {
+  try {
+    const booking = await bookingService.cancelBooking(
+      req.params.bookingId,
+      req.user,
+    );
+
+    const passengerSocketId = await locationService.getPassengerSocket(
+      booking.passenger?._id || booking.passenger,
+    );
+    const driverSocketId = booking.driver
+      ? await locationService.getDriverSocket(booking.driver?._id || booking.driver)
+      : null;
+
+    const payload = {
+      bookingId: booking._id,
+      status: booking.status,
+    };
+
+    if (passengerSocketId) {
+      io.to(passengerSocketId).emit("rideCanceled", payload);
+    }
+
+    if (driverSocketId) {
+      io.to(driverSocketId).emit("rideCanceled", payload);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: booking,
+      msg: "Booking canceled successfully",
+      error: null,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      data: {},
+      msg: "Not able to cancel booking",
+      error: error.message,
+    });
+  }
+};
+
+const getBookingDetails = async (req, res) => {
+  try {
+    const booking = await bookingService.getBookingDetails(
+      req.params.bookingId,
+      req.user,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: booking,
+      msg: "Booking fetched successfully",
+      error: null,
+    });
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      data: {},
+      msg: "Not able to fetch booking",
+      error: error.message,
+    });
+  }
+};
+
+const getCurrentRide = async (req, res) => {
+  try {
+    const booking = await bookingService.getCurrentRide(req.user);
+
+    return res.status(200).json({
+      success: true,
+      data: booking,
+      msg: "Current ride fetched successfully",
+      error: null,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      data: {},
+      msg: "Not able to fetch current ride",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   confirmBooking,
+  completeBooking,
+  cancelBooking,
+  getBookingDetails,
+  getCurrentRide,
 };

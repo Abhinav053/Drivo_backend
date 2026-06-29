@@ -1,21 +1,26 @@
 const authService = require("../services/authService");
 
+const sanitizeUser = (user) => {
+  const userObject = user.toObject ? user.toObject() : { ...user };
+  delete userObject.password;
+  return userObject;
+};
+
 const register = async (req, res) => {
   try {
-    // console.log("auth controller hit");
-
     const { user, token } = await authService.register(req.body);
     return res.status(201).json({
       success: true,
-      data: { user, token },
+      data: { user: sanitizeUser(user), token },
       error: {},
       message: "User registered successfully",
     });
   } catch (error) {
-    return res.status(201).json({
+    const statusCode = error.message.includes("already exist") ? 409 : 400;
+    return res.status(statusCode).json({
       success: false,
       data: {},
-      error: error,
+      error: error.message,
       message: "User Not able to registered",
     });
   }
@@ -23,22 +28,18 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    console.log("controller hit");
-
-    console.log(req.body);
-
     const { user, token } = await authService.login(req.body);
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      data: { user, token },
+      data: { user: sanitizeUser(user), token },
       error: {},
       message: "User loggedIn successfully",
     });
   } catch (error) {
-    return res.status(201).json({
+    return res.status(401).json({
       success: false,
       data: {},
-      error: error,
+      error: error.message,
       message: "User Not able to loggedIn",
     });
   }
