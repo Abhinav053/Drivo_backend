@@ -1,17 +1,26 @@
 const express = require("express");
-const bookingRouter = express.Router();
 
 const { authMiddleware } = require("../middlewares/authMiddleware");
 const {
   createBooking,
   confirmBooking,
+  completeBooking,
+  cancelBooking,
+  getBookingDetails,
+  getCurrentRide,
 } = require("../controllers/bookingController");
 
-// Protect all booking routes
-bookingRouter.use(authMiddleware);
-
 module.exports = (io) => {
+  const bookingRouter = express.Router();
+
+  bookingRouter.use(authMiddleware);
+
   bookingRouter.post("/", createBooking(io));
+  bookingRouter.get("/current", getCurrentRide);
   bookingRouter.post("/confirm", confirmBooking(io));
+  bookingRouter.post("/:bookingId/confirm", confirmBooking(io));
+  bookingRouter.post("/:bookingId/complete", completeBooking(io));
+  bookingRouter.post("/:bookingId/cancel", cancelBooking(io));
+  bookingRouter.get("/:bookingId", getBookingDetails);
   return bookingRouter;
 };

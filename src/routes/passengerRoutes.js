@@ -1,15 +1,19 @@
 const express = require("express");
-const passengerRouter = express.Router();
 
 const passengerController = require("../controllers/passengerController");
 
 const { authMiddleware } = require("../middlewares/authMiddleware");
-
-// Protect all passenger routes
-passengerRouter.use(authMiddleware);
+const { getCurrentRide } = require("../controllers/bookingController");
 
 module.exports = () => {
-  passengerRouter.get("/bookings", passengerController.getPassengerDetails);
+  const passengerRouter = express.Router();
+
+  passengerRouter.use(authMiddleware);
+
+  passengerRouter.get("/details", passengerController.getPassengerDetails);
+  passengerRouter.get("/me", passengerController.getPassengerDetails);
+  passengerRouter.get("/bookings", passengerController.getPassengerBookings);
+  passengerRouter.get("/ride-status", getCurrentRide);
   passengerRouter.post("/feedback", passengerController.provideFeedback);
 
   return passengerRouter;
